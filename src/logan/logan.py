@@ -28,45 +28,44 @@ class LogEvent(object):
     WAITING = 0
     FAILED = -1
 
-    def __init__(self, start_regex, end_regex, timeout=5, autoreset=False):
+    def __init__(self, start_regex, end_regex=None, timeout=5, autoreset=False):
         self.sr = start_regex
         self.er = end_regex
         self.timeout = timeout
         self.loglines = []
-        self._count = self.WAITING
+        self._state = self.WAITING
         self._must_reset = autoreset
 
     def _reinit(self):
-        self._count = self.WAITING
+        self._state = self.WAITING
         self.loglines = []
         self._matches = None
 
     def process(self, line):
-        if self._count == self.WAITING:
+        if self._state == self.WAITING:
             matches = re.search(self.sr, line)
             if matches:
                 self._matches = matches.groups()
                 self._starttime = time.time()
-                self._count = self.STARTED
+                self._state = self.STARTED
                 self.loglines.append(line)
-        elif self._count == self.STARTED:
+        elif self._state == self.STARTED:
             self.loglines.append(line)
             if time.time() - self._starttime > self.timeout:
                 print("Timed out")
-                self._count = self.FAILED
+                self._state = self.FAILED
                 return
-            matches = re.search(self.er, line)
-            if matches:
+            if self.er is None or re.search(self.er, line):
                 # Found
-                self._count = self.SUCCESS
+                self._state = self.SUCCESS
                 if self._must_reset:
                     self._reinit()
 
     def success(self):
-        return self._count == self.SUCCESS
+        return self._state == self.SUCCESS
 
     def failed(self):
-        return self._count == self.FAILED
+        return self._state == self.FAILED
 
     def __repr__(self):
         return "LogEvent instance: ({}) -> ({})\nLOGS:\n{}".format(
