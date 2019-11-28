@@ -1,25 +1,8 @@
 from sh import tail
-from functools import partial
-import re
+from typing import List, Pattern, Optional, Callable
 import time
 
-
-def follow_log(filename, events):
-    try:
-        # lazy generator that will yield a line of text when available
-        for line in tail("-f", filename, _iter=True):
-            for e in events:
-                print("Reading: " + line)
-                e.process(line)
-                if e.success():
-                    print("success: ", repr(e))
-                    return
-                elif e.failed():
-                    print("failed: ", repr(e))
-                    return
-
-    except KeyboardInterrupt:
-        pass
+__all__ = ["LogEvent", "attach_events"]
 
 
 class LogEvent(object):
@@ -28,50 +11,140 @@ class LogEvent(object):
     WAITING = 0
     FAILED = -1
 
-    def __init__(self, start_regex, end_regex, timeout=5, autoreset=False):
+    def __init__(
+        self,
+        start_regex: Pattern,
+        end_regex: Optional[Pattern] = None,
+        title: str = "",
+        timeout: float = 5,
+        autoreset: bool = False,
+    ):
+        """
+        Defines a regular expression (or optionally 2) that will be
+        searched in a log file.
+
+        @params:
+            start_regex: instance of re.Pattern
+                can be created by calling re.compile() on a regular expression.
+                If the current log line matches this, a timer is started and
+                we attempt to match for the end_regex expression.
+            end_regex: instance of re.Pattern. [Optional]
+                After the start_regex is found, we will attempt to match with
+                this pattern(if provided). If not provided, the status is
+                immediately set to SUCCESS. If provided and this pattern is
+                found within the timeout period, the event is a success, else
+                fail.
+            timeout: float [Default = 5 seconds]
+                Timeout period in seconds
+            autoreset: bool [Default = False]
+                On completion of event, this will immediately reset the
+                instance and begin looking for the start_regex again.
+                Useful if the callbacks are set and are used to trigger
+                external activity.
+        """
         self.sr = start_regex
         self.er = end_regex
         self.timeout = timeout
-        self.loglines = []
-        self._count = self.WAITING
+        self.loglines: List[str] = []
+
+        self._state = self.WAITING
         self._must_reset = autoreset
+        self._starttime = time.time()
+        if len(title) == 0:
+            self.title = self.sr.pattern
+        else:
+            self.title = title
 
     def _reinit(self):
-        self._count = self.WAITING
+        self._state = self.WAITING
         self.loglines = []
         self._matches = None
 
-    def process(self, line):
-        if self._count == self.WAITING:
-            matches = re.search(self.sr, line)
+    def process(self, line: str):
+        if (time.time() - self._starttime) > self.timeout:
+            self.reason = "Timed out"
+            self.set_state(self.FAILED)
+        if self._state == self.WAITING:
+            # Look for first pattern
+            matches = self.sr.search(line)
             if matches:
+                # TODO: Use _matches to find previously found
+                # strings in end_regex
                 self._matches = matches.groups()
-                self._starttime = time.time()
-                self._count = self.STARTED
+                self.set_state(self.STARTED)
                 self.loglines.append(line)
-        elif self._count == self.STARTED:
+                if self.er is None:
+                    self.set_state(self.SUCCESS)
+        elif self._state == self.STARTED:
+            # Look for second pattern
             self.loglines.append(line)
-            if time.time() - self._starttime > self.timeout:
-                print("Timed out")
-                self._count = self.FAILED
-                return
-            matches = re.search(self.er, line)
-            if matches:
+            if self.er.search(line):
                 # Found
-                self._count = self.SUCCESS
-                if self._must_reset:
-                    self._reinit()
+                self.set_state(self.SUCCESS)
 
-    def success(self):
-        return self._count == self.SUCCESS
+    @property
+    def on_success(self) -> Callable[..., None]:
+        if hasattr(self, "_on_success"):
+            return self._on_success
+        else:
+            return lambda x: None
 
-    def failed(self):
-        return self._count == self.FAILED
+    @on_success.setter
+    def on_success(self, callback: Callable[..., None]):
+        self._on_success = callback
 
-    def __repr__(self):
+    @property
+    def on_failed(self) -> Callable[..., None]:
+        if hasattr(self, "_on_failed"):
+            return self._on_failed
+        else:
+            return lambda x: None
+
+    @on_failed.setter
+    def on_failed(self, callback: Callable[..., None]):
+        self._on_failed = callback
+
+    def is_complete(self) -> bool:
+        return self._state in [self.SUCCESS, self.FAILED]
+
+    def set_state(self, state):
+        if state == self.SUCCESS:
+            self._state = self.SUCCESS
+            self.on_success(self)
+            if self._must_reset:
+                self._reinit()
+        elif state == self.FAILED:
+            self._state = self.FAILED
+            self.on_failed(self)
+            if self._must_reset:
+                self._reinit()
+        elif state == self.STARTED:
+            self._starttime = time.time()
+            self._state = self.STARTED
+
+    def success(self) -> bool:
+        return self._state == self.SUCCESS
+
+    def failed(self) -> bool:
+        return self._state == self.FAILED
+
+    def __str__(self) -> str:
         return "LogEvent instance: ({}) -> ({})\nLOGS:\n{}".format(
-            self.sr, self.er, "".join(self.loglines)
+            self.sr.pattern, (self.er and self.er.pattern), "".join(self.loglines)
         )
 
-    def __str__(self):
-        return "LogEvent instance: ({}) -> ({})".format(self.sr, self.er)
+
+def attach_events(log_file: str, events: List[LogEvent]):
+    try:
+        # lazy generator that will yield a line of text when available
+        for line in tail("-f", log_file, _iter=True):
+            print("Reading: " + line)
+            for e in events:
+                if not e.is_complete():
+                    e.process(line)
+            # Exit if all events are done
+            if all([e.is_complete() for e in events]):
+                return
+
+    except KeyboardInterrupt:
+        return
