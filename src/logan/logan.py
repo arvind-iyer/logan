@@ -1,6 +1,7 @@
-from sh import tail
-from typing import List, Pattern, Optional, Callable
+import re
 import time
+from typing import List, Pattern, Optional, Callable
+from sh import tail
 
 __all__ = ["LogEvent", "attach_events"]
 
@@ -10,6 +11,7 @@ class LogEvent(object):
     STARTED = 1
     WAITING = 0
     FAILED = -1
+    _subber = re.compile("`(\d+)`")
 
     def __init__(
         self,
@@ -132,6 +134,29 @@ class LogEvent(object):
         return "LogEvent instance: ({}) -> ({})\nLOGS:\n{}".format(
             self.sr.pattern, (self.er and self.er.pattern), "".join(self.loglines)
         )
+
+    def __repr__(self) -> str:
+        SUCCESS = "\x1b[42SUCCESS\x1b[0m"
+        FAIL = "\x1b[41mFAIL\x1b[0m"
+        TITLE = "\x1b[1m" + self.title + "\x1b[0m"
+
+        result = []
+
+        if self.success():
+            result.append(SUCCESS + ": " + TITLE)
+
+        elif self.failed():
+            result.append(FAIL + ": " + TITLE)
+        else:
+            result.append(["WAITING", "IN PROGRESS"][self._state] + ": " + TITLE)
+        if self.er:
+            end_pat = f"-> ({self.er.pattern})"
+        else:
+            end_pat = ""
+        result.append(f"Patterns: ({self.sr.pattern}) {end_pat}")
+        if hasattr(self, "reason"):
+            result.append("Reason: " + self.reason)
+        return "\n".join(result)
 
 
 def attach_events(log_file: str, events: List[LogEvent]):
