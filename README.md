@@ -4,6 +4,9 @@ follow log files to match regexes and trigger events
 
 ## Installation 
 
+### Requirements
+**Python 3.6 or later**
+
 ```sh
 $ pip3 install git+https://github.com/arvind-iyer/logan
 ```
