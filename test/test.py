@@ -24,12 +24,15 @@ if __name__ == "__main__":
 
     p_process = re.compile("process")
     p_success = re.compile("success")
+    p_duration = re.compile(r"(\d+\.\d+) seconds")
 
-    e1 = LogEvent(p_process, p_success, title="Test flow")
-    e2 = LogEvent(re.compile("this pattern does not exist"), title="Must fail")
-    e3 = LogEvent(p_success)
+    events = []
+    # search from line containing 'process' until line containing 'success'
+    events.append(LogEvent(p_process, p_success, title="Test flow"))
+    # search only for a line containing a floating point number(e.g. 3.0023) followed
+    # by the word 'seconds' (e.g. 14.99578 seconds)
+    events.append(LogEvent(p_duration))
 
-    events = [e1, e2, e3]
     for e in events:
         e.on_success = print_ok
     attach_events("test.log", events)
