@@ -44,6 +44,7 @@ class LogEvent(object):
         self.er = end_regex
         self.timeout = timeout
         self.loglines: List[str] = []
+        self._matches = None
 
         self._state = self.WAITING
         self._must_reset = autoreset
@@ -138,13 +139,8 @@ class LogEvent(object):
         return self._state == self.FAILED
 
     def __str__(self) -> str:
-        return "LogEvent instance: ({}) -> ({})\nLOGS:\n{}".format(
-            self.sr.pattern, (self.er and self.er.pattern), "".join(self.loglines)
-        )
-
-    def __repr__(self) -> str:
-        SUCCESS = "\x1b[42SUCCESS\x1b[0m"
-        FAIL = "\x1b[41mFAIL\x1b[0m"
+        SUCCESS = "SUCCESS\x1b[0m"
+        FAIL = "FAIL"
         TITLE = "\x1b[1m" + self.title + "\x1b[0m"
 
         result = []
@@ -161,7 +157,8 @@ class LogEvent(object):
         else:
             end_pat = ""
         result.append(f"Patterns: ({self.sr.pattern}) {end_pat}")
-        result.append("Reason: " + self.reason)
+        if self.reason:
+            result.append("Reason: " + self.reason)
         return "\n".join(result)
 
 
