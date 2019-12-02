@@ -155,10 +155,16 @@ class LogEvent(object):
         return "\n".join(result)
 
 
-def attach_events(log_file: str, events: List[LogEvent]):
+def attach_events(log_file: str, events: List[LogEvent], follow=True):
     try:
-        # lazy generator that will yield a line of text when available
-        for line in tail("-f", log_file, _iter=True):
+        if follow:
+            # lazy generator that will yield a line of text when available
+            log_lines_iter = tail("-f", log_file, _iter=True)
+        else:
+            with open(log_file, "r") as f:
+                log_lines_iter = f.readlines()
+
+        for line in log_lines_iter:
             print("Reading: " + line)
             for e in events:
                 if not e.is_complete():
