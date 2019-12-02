@@ -60,7 +60,7 @@ class LogEvent(object):
 
     def process(self, line: str):
         if (time.time() - self._starttime) > self.timeout:
-            self.reason = "Timed out"
+            self._reason = "Timed out"
             self.set_state(self.FAILED)
         if self._state == self.WAITING:
             # Look for first pattern
@@ -79,6 +79,17 @@ class LogEvent(object):
             if self.er.search(line):
                 # Found
                 self.set_state(self.SUCCESS)
+
+    @property
+    def reason(self) -> str:
+        if self._state == self.SUCCESS:
+            return ""
+        if hasattr(self, "_reason"):
+            return self._reason
+        elif self._state == self.STARTED:
+            return "End pattern not found"
+        elif self._state == self.WAITING:
+            return "Start pattern not found"
 
     @property
     def on_success(self) -> Callable[..., None]:
@@ -150,8 +161,7 @@ class LogEvent(object):
         else:
             end_pat = ""
         result.append(f"Patterns: ({self.sr.pattern}) {end_pat}")
-        if hasattr(self, "reason"):
-            result.append("Reason: " + self.reason)
+        result.append("Reason: " + self.reason)
         return "\n".join(result)
 
 
