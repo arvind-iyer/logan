@@ -11,7 +11,7 @@ class LogEvent(object):
     STARTED = 1
     WAITING = 0
     FAILED = -1
-    _subber = re.compile("`(\d+)`")
+    _subber = re.compile(r"`(\d+)`")
 
     def __init__(
         self,
@@ -25,22 +25,18 @@ class LogEvent(object):
         Defines a regular expression (or optionally 2) that will be
         searched in a log file.
 
-        @params:
-            start_regex: instance of re.Pattern
-                can be created by calling re.compile() on a regular expression.
+        Args:
+            start_regex(re.Pattern): can be created by calling re.compile() on a regular expression.
                 If the current log line matches this, a timer is started and
                 we attempt to match for the end_regex expression.
-            end_regex: instance of re.Pattern. [Optional]
-                After the start_regex is found, we will attempt to match with
-                this pattern(if provided). If not provided, the status is
-                immediately set to SUCCESS. If provided and this pattern is
-                found within the timeout period, the event is a success, else
-                fail.
-            timeout: float [Default = 5 seconds]
-                Timeout period in seconds
-            autoreset: bool [Default = False]
-                On completion of event, this will immediately reset the
-                instance and begin looking for the start_regex again.
+            end_regex(re.Pattern): [Optional] After the start_regex is found,
+                we will attempt to match with this pattern(if provided).
+                If not provided, the status is immediately set to SUCCESS.
+                If provided and this pattern is found within the timeout period,
+                the event is a success, else fail.
+            timeout(float): Timeout period in seconds
+            autoreset(float): On completion of event, this will immediately
+                reset the instance and begin looking for the start_regex again.
                 Useful if the callbacks are set and are used to trigger
                 external activity.
         """
