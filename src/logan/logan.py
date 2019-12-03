@@ -163,6 +163,16 @@ class LogEvent(object):
 
 
 def attach_events(log_file: str, events: List[LogEvent], follow=True):
+    """
+    Read a log file and listen for LogEvents.
+
+    Params:
+        log_file (str): Path to a plain-text log file
+        events (LogEvent[]): List of instances of logan.LogEvent
+        follow: If true, will imitate the behavior of 'tail -f' on the file
+            and read new lines of text when made available.
+            else, will read the text file until the last line and exit
+    """
     try:
         if follow:
             # lazy generator that will yield a line of text when available
