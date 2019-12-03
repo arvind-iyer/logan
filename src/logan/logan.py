@@ -159,6 +159,8 @@ class LogEvent(object):
         result.append(f"Patterns: ({self.sr.pattern}) {end_pat}")
         if self.reason:
             result.append("Reason: " + self.reason)
+        if self._matches:
+            result.append(f"Groups: {self._matches}")
         return "\n".join(result)
 
 
@@ -182,7 +184,6 @@ def attach_events(log_file: str, events: List[LogEvent], follow=True):
                 log_lines_iter = f.readlines()
 
         for line in log_lines_iter:
-            print("Reading: " + line)
             for e in events:
                 if not e.is_complete():
                     e.process(line)
