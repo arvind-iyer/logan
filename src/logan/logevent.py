@@ -1,16 +1,17 @@
 import re
 import time
 from typing import List, Pattern, Optional, Callable
-from sh import tail
 
-__all__ = ["LogEvent", "attach_events"]
+# from sh import tail
+
+__all__ = ["LogEvent"]
 
 
 class LogEvent(object):
-    SUCCESS = 2
-    STARTED = 1
-    WAITING = 0
     FAILED = -1
+    WAITING = 0
+    STARTED = 1
+    SUCCESS = 2
     _subber = re.compile(r"`(\d+)`")
 
     def __init__(
@@ -26,13 +27,14 @@ class LogEvent(object):
         searched in a log file.
 
         Args:
-            start_regex(re.Pattern): can be created by calling re.compile() on a regular expression.
+            start_regex(re.Pattern):
                 If the current log line matches this, a timer is started and
                 we attempt to match for the end_regex expression.
-            end_regex(re.Pattern): [Optional] After the start_regex is found,
+            end_regex(re.Pattern): [Optional]
+                After the start_regex is found,
                 we will attempt to match with this pattern(if provided).
                 If not provided, the status is immediately set to SUCCESS.
-                If provided and this pattern is found within the timeout period,
+                If provided and this pattern is found within the timeout,
                 the event is a success, else fail.
             timeout(float): Timeout period in seconds
             autoreset(float): On completion of event, this will immediately
@@ -44,6 +46,7 @@ class LogEvent(object):
         self.er = end_regex
         self.timeout = timeout
         self.loglines: List[str] = []
+        self._matches = None
 
         self._state = self.WAITING
         self._must_reset = autoreset
@@ -62,6 +65,9 @@ class LogEvent(object):
         if (time.time() - self._starttime) > self.timeout:
             self._reason = "Timed out"
             self.set_state(self.FAILED)
+        if line == "":
+            # not a new line
+            return
         if self._state == self.WAITING:
             # Look for first pattern
             matches = self.sr.search(line)
@@ -138,13 +144,8 @@ class LogEvent(object):
         return self._state == self.FAILED
 
     def __str__(self) -> str:
-        return "LogEvent instance: ({}) -> ({})\nLOGS:\n{}".format(
-            self.sr.pattern, (self.er and self.er.pattern), "".join(self.loglines)
-        )
-
-    def __repr__(self) -> str:
-        SUCCESS = "\x1b[42SUCCESS\x1b[0m"
-        FAIL = "\x1b[41mFAIL\x1b[0m"
+        SUCCESS = "SUCCESS\x1b[0m"
+        FAIL = "FAIL"
         TITLE = "\x1b[1m" + self.title + "\x1b[0m"
 
         result = []
@@ -155,33 +156,19 @@ class LogEvent(object):
         elif self.failed():
             result.append(FAIL + ": " + TITLE)
         else:
-            result.append(["WAITING", "IN PROGRESS"][self._state] + ": " + TITLE)
+            state_str = ""
+            if self._state == LogEvent.WAITING:
+                state_str = "WAITING"
+            elif self._state == LogEvent.STARTED:
+                state_str = "IN PROGRESS"
+            result.append(state_str + ": " + TITLE)
         if self.er:
             end_pat = f"-> ({self.er.pattern})"
         else:
             end_pat = ""
         result.append(f"Patterns: ({self.sr.pattern}) {end_pat}")
-        result.append("Reason: " + self.reason)
+        if self.reason:
+            result.append("Reason: " + self.reason)
+        if self._matches:
+            result.append(f"Groups: {self._matches}")
         return "\n".join(result)
-
-
-def attach_events(log_file: str, events: List[LogEvent], follow=True):
-    try:
-        if follow:
-            # lazy generator that will yield a line of text when available
-            log_lines_iter = tail("-f", log_file, _iter=True)
-        else:
-            with open(log_file, "r") as f:
-                log_lines_iter = f.readlines()
-
-        for line in log_lines_iter:
-            print("Reading: " + line)
-            for e in events:
-                if not e.is_complete():
-                    e.process(line)
-            # Exit if all events are done
-            if all([e.is_complete() for e in events]):
-                return
-
-    except KeyboardInterrupt:
-        return
