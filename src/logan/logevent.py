@@ -1,16 +1,17 @@
 import re
 import time
 from typing import List, Pattern, Optional, Callable
-from sh import tail
 
-__all__ = ["LogEvent", "attach_events"]
+# from sh import tail
+
+__all__ = ["LogEvent"]
 
 
 class LogEvent(object):
-    SUCCESS = 2
-    STARTED = 1
-    WAITING = 0
     FAILED = -1
+    WAITING = 0
+    STARTED = 1
+    SUCCESS = 2
     _subber = re.compile(r"`(\d+)`")
 
     def __init__(
@@ -26,13 +27,14 @@ class LogEvent(object):
         searched in a log file.
 
         Args:
-            start_regex(re.Pattern): can be created by calling re.compile() on a regular expression.
+            start_regex(re.Pattern):
                 If the current log line matches this, a timer is started and
                 we attempt to match for the end_regex expression.
-            end_regex(re.Pattern): [Optional] After the start_regex is found,
+            end_regex(re.Pattern): [Optional]
+                After the start_regex is found,
                 we will attempt to match with this pattern(if provided).
                 If not provided, the status is immediately set to SUCCESS.
-                If provided and this pattern is found within the timeout period,
+                If provided and this pattern is found within the timeout,
                 the event is a success, else fail.
             timeout(float): Timeout period in seconds
             autoreset(float): On completion of event, this will immediately
@@ -63,6 +65,9 @@ class LogEvent(object):
         if (time.time() - self._starttime) > self.timeout:
             self._reason = "Timed out"
             self.set_state(self.FAILED)
+        if line == "":
+            # not a new line
+            return
         if self._state == self.WAITING:
             # Look for first pattern
             matches = self.sr.search(line)
@@ -151,7 +156,12 @@ class LogEvent(object):
         elif self.failed():
             result.append(FAIL + ": " + TITLE)
         else:
-            result.append(["WAITING", "IN PROGRESS"][self._state] + ": " + TITLE)
+            state_str = ""
+            if self._state == LogEvent.WAITING:
+                state_str = "WAITING"
+            elif self._state == LogEvent.STARTED:
+                state_str = "IN PROGRESS"
+            result.append(state_str + ": " + TITLE)
         if self.er:
             end_pat = f"-> ({self.er.pattern})"
         else:
@@ -162,34 +172,3 @@ class LogEvent(object):
         if self._matches:
             result.append(f"Groups: {self._matches}")
         return "\n".join(result)
-
-
-def attach_events(log_file: str, events: List[LogEvent], follow=True):
-    """
-    Read a log file and listen for LogEvents.
-
-    Params:
-        log_file (str): Path to a plain-text log file
-        events (LogEvent[]): List of instances of logan.LogEvent
-        follow: If true, will imitate the behavior of 'tail -f' on the file
-            and read new lines of text when made available.
-            else, will read the text file until the last line and exit
-    """
-    try:
-        if follow:
-            # lazy generator that will yield a line of text when available
-            log_lines_iter = tail("-f", log_file, _iter=True)
-        else:
-            with open(log_file, "r") as f:
-                log_lines_iter = f.readlines()
-
-        for line in log_lines_iter:
-            for e in events:
-                if not e.is_complete():
-                    e.process(line)
-            # Exit if all events are done
-            if all([e.is_complete() for e in events]):
-                return
-
-    except KeyboardInterrupt:
-        return

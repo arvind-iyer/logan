@@ -1,0 +1,10 @@
+2019-12-02 12:53:31,908 - root - DEBUG - Initializing program
+2019-12-02 12:54:13,108 - root - DEBUG - Ready for execution
+2019-12-02 12:54:32,145 - root - DEBUG - Waiting for input...
+2019-12-02 12:54:59,800 - root - DEBUG - Received signal : START
+2019-12-02 12:55:08,467 - root - DEBUG - Starting execution of code
+2019-12-02 12:56:09,200 - root - DEBUG - Created sub-process for event
+2019-12-02 12:56:44,573 - root - DEBUG - Execution completed in: 3.00235 seconds
+2019-12-02 12:57:12,651 - root - DEBUG - Returning with success code
+2019-12-02 12:57:29,993 - root - DEBUG - Ready for execution
+2019-12-02 12:57:43,864 - root - DEBUG - Waiting for input...
