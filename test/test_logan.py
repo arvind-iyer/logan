@@ -40,20 +40,31 @@ if __name__ == "__main__":
 
     logman = logan.Manager()
 
+    # Test a simple start -> stop flow
     e_success = logan.LogEvent(p_process, p_success, title="Test flow")
     e_success.on_success = print_result
     logman.register_event(e_success)
 
-    e_duration = logan.LogEvent(p_duration, title="Duration")
+    # Test a start only event
+    e_duration = logan.LogEvent(p_duration, title="Test single")
     e_duration.on_success = print_result
     logman.register_event(e_duration)
 
+    # Test pattern substitution
+    e_patterns = logan.LogEvent(
+        re.compile("execution: ([\w\d_-]+)"),
+        re.compile("Returning with \w+ for `0`"),
+        title="Test pattern subsitution",
+    )
+    logman.register_event(e_patterns)
+
+    # Test on-the-fly event deletion and intentional failure
     e_proc = logan.LogEvent(re.compile("this line does not exist 123123"), timeout=1)
 
     def delete_event(e):
         print("Current events:")
         [print(event.title) for event in logman._events]
-        print("Deleting: " + e.title)
+        print("Deleting event: " + e.title)
         logman.remove_event(e)
         print()
 
@@ -62,5 +73,26 @@ if __name__ == "__main__":
 
     logman.listen(args.logfile, follow=args.follow)
 
+    success_events = []
+    failed_events = []
     for e in logman._events:
-        print(e.title)
+        if e.success():
+            success_events.append(e.title)
+        if e.failed():
+            failed_events.append(e.title)
+    if success_events:
+        print(
+            "Events Succeeded ({} / {})".format(
+                len(success_events), len(logman._events)
+            )
+        )
+        print("*" * 40)
+        for e in success_events:
+            print("- " + e)
+
+    print()
+    if failed_events:
+        print("Events Failed ({} / {})".format(len(failed_events), len(logman._events)))
+        print("*" * 40)
+        for e in failed_events:
+            print("- " + e)

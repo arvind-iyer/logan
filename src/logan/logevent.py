@@ -2,8 +2,6 @@ import re
 import time
 from typing import List, Pattern, Optional, Callable
 
-# from sh import tail
-
 __all__ = ["LogEvent"]
 
 
@@ -72,13 +70,30 @@ class LogEvent(object):
             # Look for first pattern
             matches = self.sr.search(line)
             if matches:
-                # TODO: Use _matches to find previously found
-                # strings in end_regex
-                self._matches = matches.groups()
-                self.set_state(self.STARTED)
-                self.loglines.append(line)
                 if self.er is None:
                     self.set_state(self.SUCCESS)
+                    return
+                self._matches = matches.groups()
+                if self._matches:
+                    # need to re-compile the end pattern
+
+                    # get end pattern
+                    end_pattern = self.er.pattern
+
+                    # substitute pattern
+                    def sub(m):
+                        try:
+                            idx = int(m.groups()[0])
+                            return self._matches[idx]
+                        except Exception as e:
+                            print("Exception while subbing end pattern: " + str(e))
+
+                    end_pattern_subbed = self._subber.sub(sub, end_pattern)
+                    # replace the end pattern
+                    self.er = re.compile(end_pattern_subbed)
+                self.set_state(self.STARTED)
+                self.loglines.append(line)
+
         elif self._state == self.STARTED:
             # Look for second pattern
             self.loglines.append(line)
